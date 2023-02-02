@@ -12,4 +12,7 @@ def test_vtk_version_matches():
     env_version = os.environ['VTK_VERSION']
 
     assert version.GetVTKVersion() == env_version, \
-        "VTK package version does not match installed distribution"
+        "Installed VTK python package version ({}) "
+        "does not match installed binaries ({})".format(
+            version, env_version
+        )
