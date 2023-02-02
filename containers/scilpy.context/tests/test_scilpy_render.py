@@ -9,7 +9,7 @@ def test_scilpy_gradient_render(script_runner):
         "--fsl"
     )
 
-    assert res1
+    assert res1.success, res1.stderr
 
     res2 = script_runner.run(
         "scil_visualize_gradients.py",
@@ -17,4 +17,4 @@ def test_scilpy_gradient_render(script_runner):
         "--out_basename", "sampling_snap"
     )
 
-    assert res2
+    assert res2.success, res2.stderr

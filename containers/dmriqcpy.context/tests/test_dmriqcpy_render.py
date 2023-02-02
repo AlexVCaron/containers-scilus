@@ -11,47 +11,23 @@ def test_dmriqcpy_dti(script_runner):
     from os.path import join
     import tempfile
 
-    space_shape= (3, 3, 3)
+    space_shape= (15, 15, 15)
     vol_shape = space_shape + (3, 6)
     tensor_volume = np.zeros(vol_shape)
     tensor_volume[..., 0, :] = [3E-3, 3E-3, 3E-3, 1., 0., 0.]
-    tensor_volume[
-        (0, 1, 2),
-        (1, 1, 1),
-        (1, 1, 1),
-        0
-    ] = [1.7E-3, 4E-4, 4E-4, 1., 0., 0.]
-    tensor_volume[
-        (1, 1, 1),
-        (0, 1, 2),
-        (1, 1, 1),
-        1
-    ] = [1.7E-3, 4E-4, 4E-4, 0., 1., 0.]
-    tensor_volume[
-        (1, 1, 1),
-        (1, 1, 1),
-        (0, 1, 2),
-        1
-    ] = [1.7E-3, 4E-4, 4E-4, 0., 0., 1.]
+    tensor_volume[:, 5:10, 5:10, 0] = [1.7E-3, 4E-4, 4E-4, 1., 0., 0.]
+    tensor_volume[5:10, :, 5:10, 1] = [1.7E-3, 4E-4, 4E-4, 0., 1., 0.]
+    tensor_volume[5:10, 5:10, :, 2] = [1.7E-3, 4E-4, 4E-4, 0., 0., 1.]
 
     wm_mask = np.zeros(space_shape, dtype=bool)
-    wm_mask[
-        (1, 0, 1, 1, 2, 1, 1),
-        (0, 1, 1, 1, 1, 2, 1),
-        (1, 1, 0, 1, 1, 1, 2),
-    ] = True
+    wm_mask[:, 5:10, 5:10] = True
+    wm_mask[5:10, :, 5:10] = True
+    wm_mask[5:10, 5:10, :] = True
     gm_mask = np.zeros(space_shape, dtype=bool)
-    gm_mask[
-        (1, 0, 1, 2, 1, 1),
-        (0, 1, 1, 1, 2, 1),
-        (1, 1, 0, 1, 1, 2),
-    ] = True
-    csf_mask = np.zeros(space_shape, dtype=bool)
-    csf_mask[
-        (0, 0, 0, 0, 2, 2, 2, 2),
-        (0, 0, 2, 2, 0, 0, 2, 2),
-        (0, 2, 0, 2, 0, 2, 0, 2)
-    ] = True
+    csf_mask = np.ones(space_shape, dtype=bool)
+    csf_mask[:, 5:10, 5:10] = False
+    csf_mask[5:10, :, 5:10] = False
+    csf_mask[5:10, 5:10, :] = False
 
     gtab = gradient_table(
         np.concatenate(([0], np.ones((100,), dtype=int) * 1000)),
@@ -123,4 +99,4 @@ def test_dmriqcpy_dti(script_runner):
             "--csf", join(temp_dir, "csf.nii.gz")
         )
 
-        return ret.success
+        assert ret.success, ret.stderr
