@@ -21,6 +21,7 @@ RUN --mount=type=cache,sharing=locked,target=/var/cache/apt \
         libblas-dev \
         libfreetype6-dev \
         liblapack-dev \
+        python3-pyopencl \
         wget \
         unzip && \
     rm -rf /var/lib/apt/lists/*
