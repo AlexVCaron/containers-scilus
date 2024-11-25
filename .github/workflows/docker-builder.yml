@@ -139,7 +139,7 @@ on:
 
 jobs:
   build-container:
-    runs-on: ${{ inputs.runner-image && inputs.runner-image || ubuntu-latest }}
+    runs-on: ${{ inputs.runner-image && inputs.runner-image || 'ubuntu-latest' }}
     steps:
       -
         name: Validate input parameters
