@@ -1,44 +1,49 @@
 # syntax=docker.io/docker/dockerfile:1.10.0
 
-FROM scratch AS src
+FROM alpine as mesa-stage
 
 ARG MESA_VERSION
-ARG VTK_VERSION
 
 ENV MESA_VERSION=${MESA_VERSION:-19.0.8}
-ENV VTK_VERSION=${VTK_VERSION:-8.2.0}
 
 ADD --link https://archive.mesa3d.org/mesa-${MESA_VERSION}.tar.xz /mesa/mesa.tar.xz
-ADD --link https://gitlab.kitware.com/vtk/vtk/-/archive/v${VTK_VERSION}/vtk-v${VTK_VERSION}.tar.gz /vtk/vtk.tar.gz
+
+WORKDIR /mesa
+RUN tar -xJf mesa.tar.xz && \
+    mv mesa-${MESA_VERSION}/* . && \
+    rm -rf mesa.tar.xz mesa-${MESA_VERSION} && \
+    mkdir build && \
+    echo "[binaries]\nllvm-config = '/usr/bin/llvm-config'" >> llvm.ini
+
+
+FROM alpine AS vtk-stage
+
+ARG VTK_VERSION
+
+ENV VTK_VERSION=${VTK_VERSION:-8.2.0}
+
+ADD --chmod=644 --link https://gitlab.kitware.com/vtk/vtk/-/archive/v${VTK_VERSION}/vtk-v${VTK_VERSION}.tar.gz /vtk/vtk.tar.gz
 ADD --chmod=644 --link patches/vtk-${VTK_VERSION}/ /vtk_patches/
 
-FROM vtk-builder AS vtk
+WORKDIR /vtk
+RUN tar -xzf vtk.tar.gz && \
+    mv vtk-v${VTK_VERSION}/* vtk-v${VTK_VERSION}/.clang-tidy . && \
+    cp /vtk_patches/vtkWheelPreparation.cmake CMake/. && \
+    cp /vtk_patches/setup.py.in CMake/. && \
+    rm -rf vtk.tar.gz vtk-v${VTK_VERSION}
+
+
+FROM vtk-builder as mesa-build
 
 ARG MESA_BUILD_NTHREADS
 ARG MESA_INSTALL_PATH
 ARG MESA_VERSION
-ARG VTK_BUILD_NTHREADS
-ARG VTK_BUILD_PATH
-ARG VTK_INSTALL_PATH
-ARG VTK_PYTHON_VERSION
-ARG VTK_VERSION
-ARG VTK_WHEEL_VERSION_LOCAL
-ARG WHEELHOUSE_PATH
 
 ENV MESA_BUILD_NTHREADS=${MESA_BUILD_NTHREADS:-""}
 ENV MESA_INSTALL_PATH=${MESA_INSTALL_PATH:-/mesa}
 ENV MESA_VERSION=${MESA_VERSION:-19.0.8}
-ENV VTK_BUILD_NTHREADS=${VTK_BUILD_NTHREADS:-""}
-ENV VTK_BUILD_PATH=${VTK_BUILD_PATH:-/vtk_build}
-ENV VTK_INSTALL_PATH=${VTK_INSTALL_PATH:-/vtk}
-ENV VTK_PYTHON_VERSION=${VTK_PYTHON_VERSION:-3.10}
-ENV VTK_VERSION=${VTK_VERSION:-8.2.0}
-ENV VTK_WHEEL_VERSION_LOCAL=${VTK_WHEEL_VERSION_LOCAL:-scilosmesa}
-ENV WHEELHOUSE_PATH=${WHEELHOUSE_PATH:-/wheelhouse}
 
 RUN --mount=type=cache,sharing=locked,target=/var/cache/apt \
-    if [ "${VTK_PYTHON_VERSION%%.*}" = "3" ]; then export PYTHON_MAJOR=3; fi && \
-    mkdir ${MESA_INSTALL_PATH} ${VTK_INSTALL_PATH} ${VTK_BUILD_PATH} ${WHEELHOUSE_PATH} && \
     apt-get update && DEBIAN_FRONTEND=noninteractive apt-get -y install \
         bison \
         build-essential \
@@ -48,30 +53,14 @@ RUN --mount=type=cache,sharing=locked,target=/var/cache/apt \
         llvm-14 \
         llvm-14-dev \
         llvm-14-runtime \
-        libboost-all-dev \
-        libopenmpi-dev \
         meson \
-        ninja-build \
-        pkg-config \
-        python${PYTHON_MAJOR}-mako \
-        python${PYTHON_MAJOR}-pip \
-        python${PYTHON_MAJOR}-setuptools \
-        python${VTK_PYTHON_VERSION} \
-        python${VTK_PYTHON_VERSION}-dev \
-        clang \
-        wget \
-        xorg-dev && \
+        python3-mako && \
     rm -rf /var/lib/apt/lists/*
 
-WORKDIR /mesa_source
-RUN --mount=type=bind,rw,from=src,source=/mesa,target=/mesa_source \
-    tar -xJf mesa.tar.xz && \
-    rm mesa.tar.xz && \
-    cd mesa-${MESA_VERSION} && \
-    mkdir build && \
-    echo "[binaries]\nllvm-config = '/usr/bin/llvm-config'" >> llvm.ini && \
+WORKDIR /mesa_build
+RUN --mount=type=bind,rw,from=mesa-stage,source=/mesa,target=/mesa_source \
     meson setup \
-        --native-file llvm.ini \
+        --native-file /mesa_source/llvm.ini \
         -Dprefix=${MESA_INSTALL_PATH} \
         -Dbuildtype=release \
         -Dshared-llvm=enabled \
@@ -92,20 +81,60 @@ RUN --mount=type=bind,rw,from=src,source=/mesa,target=/mesa_source \
         -Dvulkan-drivers=[] \
         -Dplatforms=[] \
         -Dgallium-drivers=swrast \
-        build . || (cat build/meson-logs/meson-log.txt && exit 1) && \
+        build /mesa_source || (cat build/meson-logs/meson-log.txt && exit 1) && \
     [ -z "$MESA_BUILD_NTHREADS" ] && \
         { ninja -C build/ -j $(nproc --all) install; } || \
         { ninja -C build/ -j ${MESA_BUILD_NTHREADS} install; }
 
+
+FROM vtk-builder AS vtk-build
+
+ARG MESA_INSTALL_PATH
+ARG VTK_BUILD_NTHREADS
+ARG VTK_BUILD_PATH
+ARG VTK_INSTALL_PATH
+ARG VTK_PYTHON_VERSION
+ARG VTK_VERSION
+ARG VTK_WHEEL_VERSION_LOCAL
+ARG WHEELHOUSE_PATH
+
+ENV MESA_INSTALL_PATH=${MESA_INSTALL_PATH:-/mesa}
+ENV VTK_BUILD_NTHREADS=${VTK_BUILD_NTHREADS:-""}
+ENV VTK_BUILD_PATH=${VTK_BUILD_PATH:-/vtk_build}
+ENV VTK_INSTALL_PATH=${VTK_INSTALL_PATH:-/vtk}
+ENV VTK_PYTHON_VERSION=${VTK_PYTHON_VERSION:-3.10}
+ENV VTK_VERSION=${VTK_VERSION:-8.2.0}
+ENV VTK_WHEEL_VERSION_LOCAL=${VTK_WHEEL_VERSION_LOCAL:-scilosmesa}
+ENV WHEELHOUSE_PATH=${WHEELHOUSE_PATH:-/wheelhouse}
+
+RUN --mount=type=cache,sharing=locked,target=/var/cache/apt \
+    if [ "${VTK_PYTHON_VERSION%%.*}" = "3" ]; then export PYTHON_MAJOR=3; fi && \
+    apt-get update && DEBIAN_FRONTEND=noninteractive apt-get -y install \
+        build-essential \
+        gcc \
+        git \
+        llvm-14-runtime \
+        libboost-all-dev \
+        libopenmpi-dev \
+        meson \
+        ninja-build \
+        pkg-config \
+        python${PYTHON_MAJOR}-mako \
+        python${PYTHON_MAJOR}-pip \
+        python${PYTHON_MAJOR}-setuptools \
+        python${VTK_PYTHON_VERSION} \
+        python${VTK_PYTHON_VERSION}-dev \
+        clang \
+        wget \
+        xorg-dev && \
+    rm -rf /var/lib/apt/lists/*
+
 ENV LD_LIBRARY_PATH=${MESA_INSTALL_PATH}/lib/x86_64-linux-gnu:${MESA_INSTALL_PATH}/lib:$LD_LIBRARY_PATH
 
-WORKDIR ${VTK_BUILD_PATH}
-RUN --mount=type=bind,rw,from=src,source=/vtk,target=${VTK_BUILD_PATH} \
-    --mount=type=bind,rw,from=src,source=/vtk_patches,target=/vtk_patches \
-    tar -xzf vtk.tar.gz && \
-    rm vtk.tar.gz && \
-    cp /vtk_patches/vtkWheelPreparation.cmake vtk-v${VTK_VERSION}/CMake/. && \
-    cp /vtk_patches/setup.py.in vtk-v${VTK_VERSION}/CMake/. && \
+WORKDIR /vtk_build
+RUN --mount=type=bind,from=vtk-stage,source=/vtk,target=/vtk_source \
+    --mount=type=bind,from=mesa-build,source=${MESA_INSTALL_PATH},target=${MESA_INSTALL_PATH} \
+    mkdir ${VTK_INSTALL_PATH} ${WHEELHOUSE_PATH} && \
     if [ "${VTK_PYTHON_VERSION%%.*}" = "3" ]; then export PYTHON_MAJOR=3; fi && \
     cmake -GNinja \
         -DCMAKE_BUILD_TYPE=Release \
@@ -150,7 +179,7 @@ RUN --mount=type=bind,rw,from=src,source=/vtk,target=${VTK_BUILD_PATH} \
         -DOSMESA_INCLUDE_DIR=${MESA_INSTALL_PATH}/include/ \
         -DOSMESA_LIBRARY=${MESA_INSTALL_PATH}/lib/x86_64-linux-gnu/libOSMesa.so \
         -DCMAKE_INSTALL_PREFIX=${VTK_INSTALL_PATH} \
-        vtk-v${VTK_VERSION}/ && \
+        /vtk_source && \
     [ -z "$VTK_BUILD_NTHREADS" ] && \
         { ninja -j $(nproc --all); } || \
         { ninja -j ${VTK_BUILD_NTHREADS}; } && \
@@ -204,19 +233,30 @@ RUN --mount=type=cache,sharing=locked,target=/var/cache/apt \
     rm -rf /var/lib/apt/lists/*
 
 
-COPY --from=vtk --link ${MESA_INSTALL_PATH} ${MESA_INSTALL_PATH}
-COPY --from=vtk --link ${VTK_INSTALL_PATH} ${VTK_INSTALL_PATH}
-COPY --from=vtk --link ${WHEELHOUSE_PATH} ${WHEELHOUSE_PATH}
+FROM vtk-install as vtk
 
-WORKDIR /
-RUN --mount=type=cache,sharing=locked,target=/root/.cache/pip \
-    python${VTK_PYTHON_VERSION} -m pip config --global set install.find-links ${WHEELHOUSE_PATH} && \
-    python${VTK_PYTHON_VERSION} -m pip install vtk==${VTK_VERSION}
+ARG MESA_INSTALL_PATH
+ARG VTK_INSTALL_PATH
+ARG VTK_PYTHON_VERSION
+ARG VTK_VERSION
+ARG WHEELHOUSE_PATH
 
+ENV MESA_INSTALL_PATH=${MESA_INSTALL_PATH:-/mesa}
+ENV VTK_INSTALL_PATH=${VTK_INSTALL_PATH:-/vtk}
+ENV VTK_PYTHON_VERSION=${VTK_PYTHON_VERSION:-3.10}
+ENV VTK_VERSION=${VTK_VERSION:-8.2.0}
+ENV WHEELHOUSE_PATH=${WHEELHOUSE_PATH:-/wheelhouse}
 
 WORKDIR /
 RUN ( [ -f "VERSION" ] || touch VERSION ) && \
     echo "Mesa => ${MESA_VERSION}\n" >> VERSION && \
     echo "VTK => ${VTK_VERSION}\n" >> VERSION
 
-USER ${CONTAINER_RUN_USER:-0}
+COPY --from=mesa-build --link ${MESA_INSTALL_PATH} ${MESA_INSTALL_PATH}
+COPY --from=vtk-build --link ${VTK_INSTALL_PATH} ${VTK_INSTALL_PATH}
+COPY --from=vtk-build --link ${WHEELHOUSE_PATH} ${WHEELHOUSE_PATH}
+
+WORKDIR /
+RUN --mount=type=cache,sharing=locked,target=/root/.cache/pip \
+    python${VTK_PYTHON_VERSION} -m pip config --global set install.find-links ${WHEELHOUSE_PATH} && \
+    python${VTK_PYTHON_VERSION} -m pip install vtk==${VTK_VERSION}

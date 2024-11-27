@@ -1,6 +1,6 @@
 # syntax=docker.io/docker/dockerfile:1.10.0
 
-FROM scratch as clone
+FROM scratch as cmake-stage
 
 ARG CMAKE_REVISION
 
@@ -26,7 +26,7 @@ RUN --mount=type=cache,sharing=locked,target=/var/cache/apt \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /cmake
-RUN --mount=type=bind,rw,from=clone,source=/cmake,target=/cmake \
+RUN --mount=type=bind,rw,from=cmake-stage,source=/cmake,target=/cmake \
     ./bootstrap && \
     [ -z "$CMAKE_BUILD_NTHREADS" ] && \
         { make -j $(nproc --all); } || \
