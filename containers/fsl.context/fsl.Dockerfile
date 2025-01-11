@@ -1,15 +1,22 @@
 # syntax=docker.io/docker/dockerfile:1.10.0
 
+FROM scratch as fsl-stage
+
+ARG FSL_INSTALLER_VERSION
+
+ENV FSL_INSTALLER_VERSION=${FSL_INSTALLER_VERSION:-3.14.0}
+
+ADD --link https://git.fmrib.ox.ac.uk/fsl/conda/installer/-/raw/${FSL_INSTALLER_VERSION}/fsl/installer/fslinstaller.py /fsl/fslinstaller.py
+ADD --link ./manifest.json /fsl/manifest.json
+
 
 FROM fsl-builder as fsl
 
 ARG FSL_INSTALL_PATH
 ARG FSL_VERSION
-ARG FSL_INSTALLER_VERSION
 
 ENV FSL_INSTALL_PATH=${FSL_INSTALL_PATH:-/fsl}
 ENV FSL_VERSION=${FSL_VERSION:-6.0.6.4}
-ENV FSL_INSTALLER_VERSION=${FSL_INSTALLER_VERSION:-3.14.0}
 ENV MINICONDA_VERSION=${MINICONDA_VERSION:-22.11.1-4}
 
 ENV LC_CTYPE="en_US.UTF-8"
@@ -26,16 +33,15 @@ RUN --mount=type=cache,sharing=locked,target=/var/cache/apt \
         git \
     && rm -rf /var/lib/apt/lists/*
 
-ADD --link https://git.fmrib.ox.ac.uk/fsl/conda/installer/-/raw/${FSL_INSTALLER_VERSION}/fsl/installer/fslinstaller.py /fsl_build/fslinstaller.py
-
 WORKDIR /fsl_build
-RUN --mount=type=bind,source=./manifest.json,target=/fsl_build/manifest.json \
+RUN --mount=type=bind,from=fsl-stage,source=/fsl,target=/fsl_source \
+    --mount=type=bind,source=./manifest.json,target=/fsl_source/manifest.json \
     --mount=type=cache,sharing=locked,target=/root/.cache/pip \
     echo "en_US.UTF-8 UTF-8" | tee -a /etc/locale.gen && locale-gen && \
-    python fslinstaller.py \
+    python /fsl_source/fslinstaller.py \
         -d ${FSL_INSTALL_PATH} \
         -V ${FSL_VERSION} \
-        --manifest manifest.json \
+        --manifest /fsl_source/manifest.json \
         -n -o || (cd /root && cat $(ls | grep fsl_installation) && exit 1) && \
     rm -rf ${FSL_INSTALL_PATH}/cmake \
         ${FSL_INSTALL_PATH}/compiler_compat \

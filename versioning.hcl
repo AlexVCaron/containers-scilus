@@ -1,6 +1,6 @@
 # scilus-versioning.hcl
 
-base-install-image="nvidia/cuda:11.7.1-runtime-ubuntu22.04"
+base-distribution-image="nvidia/cuda:11.7.1-runtime-ubuntu22.04"
 base-build-image="ubuntu:jammy-20230301"
 
 actions-runner-version="2.319.1"
@@ -10,7 +10,7 @@ scilpy-revision="2.0.2"
 
 ants-revision="v2.4.3"
 cmake-revision="v3.21.6"
-fsl-version="6.0.6.4"
+fsl-version="6.0.6.4.scilus.eddy.2401.2.lean"
 fsl-installer-version="3.14.0"
 mrtrix-revision="3.0.4"
 mesa-version="22.0.5"

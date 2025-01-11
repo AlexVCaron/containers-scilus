@@ -1,6 +1,6 @@
 # syntax=docker.io/docker/dockerfile:1.10.0
 
-FROM flow-base as scilus-flows
+FROM scilus-flows-base as scilus-flows
 
 ARG TRACTOFLOW_VERSION
 ARG DMRIQCFLOW_VERSION
@@ -90,7 +90,7 @@ RUN apt-get -y remove \
 
 WORKDIR /
 RUN mkdir /extractor_flow && \
-    tar -jxf /scilus_flows/extractor_flow/containers/templates_and_ROIs.tar.bz2 -C /extractor_flow/ && \
+    tar -jxf /scilus_flows/extractor_flow/containers/JHU_template_GIN_dil.tar.bz2 -C /extractor_flow/ && \
     tar -jxf /scilus_flows/extractor_flow/containers/filtering_lists.tar.bz2 -C /extractor_flow/ && \
     chmod go+rx /extractor_flow
 

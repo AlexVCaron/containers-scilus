@@ -18,6 +18,11 @@ RUN --mount=type=cache,sharing=locked,target=/var/cache/apt \
     mkdir -p /nextflow/.nextflow/plugins && \
     chmod -R ugo+rx /nextflow
 
+WORKDIR /
+RUN ( [ -f "VERSION" ] || touch VERSION ) && \
+    echo "Nextflow => ${NEXTFLOW_VERSION}\n" >> VERSION && \
+    echo "Java => ${JAVA_VERSION}\n" >> VERSION
+
 ADD --link https://github.com/nextflow-io/nextflow/releases/download/v${NEXTFLOW_VERSION}/nextflow-${NEXTFLOW_VERSION}-all /nextflow/nextflow
 
 WORKDIR /nextflow
@@ -26,8 +31,3 @@ RUN bash nextflow && \
     chmod -R ugo+rx .nextflow && \
     mv nextflow /usr/bin/nextflow && \
     apt-get -y autoremove
-
-WORKDIR /
-RUN ( [ -f "VERSION" ] || touch VERSION ) && \
-    echo "Nextflow => ${NEXTFLOW_VERSION}\n" >> VERSION && \
-    echo "Java => ${JAVA_VERSION}\n" >> VERSION

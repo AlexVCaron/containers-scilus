@@ -6,13 +6,15 @@ LABEL maintainer=SCIL
 
 ARG BLAS_NUM_THREADS
 ARG PYTHON_VERSION
-ARG SCILPY_REVISION
 ARG PYTHON_PACKAGE_DIR
+ARG SCILPY_REVISION
+ARG WHEELHOUSE_PATH
 
-ENV PYTHON_PACKAGE_DIR=${PYTHON_PACKAGE_DIR:-site-packages}
-ENV PYTHON_VERSION=${PYTHON_VERSION:-3.10}
 ENV SCILPY_REVISION=${SCILPY_REVISION:-master}
 ENV OPENBLAS_NUM_THREADS=${BLAS_NUM_THREADS:-1}
+ENV PYTHON_VERSION=${PYTHON_VERSION:-3.10}
+ENV PYTHON_PACKAGE_DIR=${PYTHON_PACKAGE_DIR:-site-packages}
+ENV WHEELHOUSE_PATH=${WHEELHOUSE_PATH:-/wheelhouse}
 
 ENV LC_CTYPE="en_US.UTF-8"
 ENV LC_ALL="en_US.UTF-8"
@@ -36,25 +38,25 @@ RUN --mount=type=cache,sharing=locked,target=/var/cache/apt \
         wget && \
     rm -rf /var/lib/apt/lists/*
 
+WORKDIR /
+RUN ( [ -f "VERSION" ] || touch VERSION ) && \
+    echo "Scilpy => ${SCILPY_REVISION}\n" >> VERSION
 
 ADD --link https://github.com/scilus/scilpy.git#${SCILPY_REVISION} /scilpy
 
 WORKDIR /scilpy
 RUN --mount=type=cache,sharing=locked,target=/root/.cache/pip \
     echo "en_US.UTF-8 UTF-8" | tee -a /etc/locale.gen && locale-gen && \
-    python${PYTHON_VERSION} -m pip install "packaging<22.0" "setuptools<=70.0" && \
+    python${PYTHON_VERSION} -m pip config --global set install.find-links ${WHEELHOUSE_PATH} && \
+    python${PYTHON_VERSION} -m pip install "packaging<22.0" "setuptools<=70.0" "numpy<1.25.0" && \
     SKLEARN_ALLOW_DEPRECATED_SKLEARN_PACKAGE_INSTALL=True python${PYTHON_VERSION} -m pip install \
-        pyopencl==2023.1.3 -e . && \
-    python${PYTHON_VERSION} -m pip cache purge
-
-RUN sed -i '41s/.*/backend : Agg/' /usr/local/lib/python${PYTHON_VERSION}/${PYTHON_PACKAGE_DIR}/matplotlib/mpl-data/matplotlibrc && \
+        pyopencl==2023.1.3 . && \
+    python${PYTHON_VERSION} -m pip cache purge && \
+    sed -i '41s/.*/backend : Agg/' /usr/local/lib/python${PYTHON_VERSION}/${PYTHON_PACKAGE_DIR}/matplotlib/mpl-data/matplotlibrc && \
     cp -r /scilpy/data /usr/local/lib/python${PYTHON_VERSION}/${PYTHON_PACKAGE_DIR}/ && \
     apt-get -y remove \
         git \
         wget \
         unzip && \
-    apt-get -y autoremove
-
-WORKDIR /
-RUN ( [ -f "VERSION" ] || touch VERSION ) && \
-    echo "Scilpy => ${SCILPY_REVISION}\n" >> VERSION
+    apt-get -y autoremove && \
+    rm -rf ./*

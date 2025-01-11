@@ -50,15 +50,21 @@ RUN --mount=type=cache,sharing=locked,target=/var/cache/apt \
         flex \
         gcc \
         git \
+        glslang-tools \
+        libclang-dev \
+        libclc-dev \
+        libdrm-dev \
+        libexpat-dev \
         llvm-14 \
         llvm-14-dev \
         llvm-14-runtime \
         meson \
-        python3-mako && \
+        python3-mako \
+        zlib1g-dev && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /mesa_build
-RUN --mount=type=bind,rw,from=mesa-stage,source=/mesa,target=/mesa_source \
+RUN --mount=type=bind,from=mesa-stage,source=/mesa,target=/mesa_source \
     meson setup \
         --native-file /mesa_source/llvm.ini \
         -Dprefix=${MESA_INSTALL_PATH} \
@@ -239,12 +245,14 @@ ARG MESA_INSTALL_PATH
 ARG VTK_INSTALL_PATH
 ARG VTK_PYTHON_VERSION
 ARG VTK_VERSION
+ARG MESA_VERSION
 ARG WHEELHOUSE_PATH
 
 ENV MESA_INSTALL_PATH=${MESA_INSTALL_PATH:-/mesa}
 ENV VTK_INSTALL_PATH=${VTK_INSTALL_PATH:-/vtk}
 ENV VTK_PYTHON_VERSION=${VTK_PYTHON_VERSION:-3.10}
 ENV VTK_VERSION=${VTK_VERSION:-8.2.0}
+ENV MESA_VERSION=${MESA_VERSION:-19.0.8}
 ENV WHEELHOUSE_PATH=${WHEELHOUSE_PATH:-/wheelhouse}
 
 WORKDIR /
